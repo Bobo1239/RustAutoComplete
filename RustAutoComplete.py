@@ -168,22 +168,40 @@ class RustAutocomplete(sublime_plugin.EventListener):
                 print("Unable to find racer executable (check settings)")
                 return
 
-            results = []
+            def cmp(raw_result):
+                return {
+                    "Module": 0,
+                    "Function": 1,
+                    "Struct": 2,
+                    "Trait": 3,
+                    "Type": 4,
+                    "Enum": 5
+                }.get(raw_result.type, 100)
+
+            raw_results = sorted(raw_results, key = cmp)
+
             lalign = 0;
             ralign = 0;
             for result in raw_results:
-                result.middle = "{0} ({1})".format(result.type, os.path.basename(result.path))
-                lalign = max(lalign,len(result.completion)+len(result.middle))
+                lalign = max(lalign, len(result.completion) + len(result.type))
                 ralign = max(ralign, len(result.context))
 
+            results = []
+            longest = 0;
             for result in raw_results:
-                context = result.context
-                result = "{0} {1:>{3}} : {2:{4}}".format(result.completion, result.middle, result.context, lalign - len(result.completion), ralign), result.snippet
-                results.append(result)
+                context = " : {}".format(result.context) if result.type != "Module" else ""
+                # TODO: consider using \t -> snippet description style
+                completion = "{0}   {1:>{2}}{3}".format(result.completion, result.type, lalign - len(result.completion), context)
+                longest = max(longest, len(completion))
+                results.append((completion, result.snippet))
+
+            # print(results)
             if len(results) > 0:
-                # return list(set(results))
-                return (list(set(results)),
-                        sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
+                # print(results)
+                # add padding at the end of the first entry as that appears to set the popup width
+                completion = "{0}{1:>{2}}".format(results[0][0], '', max(0, longest - len(results[0][0]) - 2))
+                results[0] = (completion, results[0][1])
+                return (results, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
 
 
 class RustGotoDefinitionCommand(sublime_plugin.TextCommand):
